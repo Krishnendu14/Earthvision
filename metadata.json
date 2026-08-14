@@ -1,0 +1,6 @@
+{
+  "name": "EarthVision - 3D Hand Gesture Climate Globe",
+  "description": "Interactive 3D Earth globe displaying real-time temperature, pressure, airflow, sea levels, and climate parameters controlled via browser hand gesture camera tracking.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
