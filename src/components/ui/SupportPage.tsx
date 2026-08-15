@@ -1,6 +1,5 @@
 import React, { useEffect, useRef } from "react";
 import { ArrowLeft, Heart, ExternalLink, Sparkles, ShieldCheck } from "lucide-react";
-import stickerImg from "../../assets/images/sticker.webp";
 
 interface SupportPageProps {
   onBack: () => void;
@@ -122,17 +121,10 @@ export const SupportPage: React.FC<SupportPageProps> = ({ onBack }) => {
 
           <div className="relative w-56 h-56 sm:w-64 sm:h-64 rounded-2xl overflow-hidden bg-slate-950 border border-slate-800 flex items-center justify-center p-2 group-hover:scale-105 transition-transform duration-300">
             <img
-              src={stickerImg || "/sticker.webp"}
+              src="https://i.ibb.co/k2BGnsMc/STK-20250314-WA0000.webp"
               alt="Love you man sticker"
               className="w-full h-full object-contain select-none"
-              onError={(e) => {
-                const target = e.target as HTMLImageElement;
-                if (!target.src.endsWith("/sticker.webp")) {
-                  target.src = "/sticker.webp";
-                } else {
-                  target.src = "https://i.ibb.co/k2BGnsMc/STK-20250314-WA0000.webp";
-                }
-              }}
+              loading="eager"
             />
           </div>
         </div>
