@@ -14,6 +14,7 @@
     "@google/genai": "^2.4.0",
     "@mediapipe/camera_utils": "^0.3.1675466862",
     "@mediapipe/hands": "^0.4.1675469240",
+    "@mediapipe/tasks-vision": "^1.0.1",
     "@tailwindcss/vite": "^4.1.14",
     "@types/three": "^0.185.4",
     "@vitejs/plugin-react": "^5.0.4",

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import {
   Camera,
   ChevronDown,
+  Coffee,
   Globe2,
   Hand,
   HelpCircle,
@@ -23,6 +24,7 @@ import { GestureHUD } from "./components/ui/GestureHUD";
 import { ParameterControls } from "./components/ui/ParameterControls";
 import { LocationMetricsPanel } from "./components/ui/LocationMetricsPanel";
 import { GestureGuideModal } from "./components/ui/GestureGuideModal";
+import { SupportPage } from "./components/ui/SupportPage";
 
 type MobileTab = "none" | "metrics" | "controls" | "camera";
 
@@ -64,6 +66,7 @@ export default function App() {
 
   // UI Modals & Camera & Mobile Sheet Drawer state
   const [isGuideOpen, setIsGuideOpen] = useState<boolean>(false);
+  const [isSupportPageOpen, setIsSupportPageOpen] = useState<boolean>(false);
   const [isCameraActive, setIsCameraActive] = useState<boolean>(true);
   const [isMobileSheetOpen, setIsMobileSheetOpen] = useState<boolean>(false);
   const [mobileSheetTab, setMobileSheetTab] = useState<"search" | "layers">("search");
@@ -186,8 +189,9 @@ export default function App() {
           </div>
         </div>
 
-        {/* Top Right Actions */}
+        {/* Top Right Actions: Left-to-Right layout: Camera -> Hand Gesture Guide -> Co+2Fe ☕ */}
         <div className="flex items-center gap-1.5 sm:gap-2 pointer-events-auto">
+          {/* 1. Camera Toggle */}
           <button
             onClick={() => setIsCameraActive(!isCameraActive)}
             className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl text-xs font-semibold backdrop-blur-xl transition shadow-lg border ${
@@ -200,6 +204,8 @@ export default function App() {
             <Camera className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-cyan-400" />
             <span className="hidden sm:inline">{isCameraActive ? "Camera ON" : "Hand Camera"}</span>
           </button>
+
+          {/* 2. Hand Gesture Guide */}
           <button
             onClick={() => setIsGuideOpen(true)}
             className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 bg-slate-900/85 hover:bg-slate-800 text-slate-300 border border-slate-800 rounded-xl text-xs font-medium backdrop-blur-xl transition shadow-lg"
@@ -207,6 +213,16 @@ export default function App() {
           >
             <Hand className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-cyan-400" />
             <span className="hidden sm:inline">Guide</span>
+          </button>
+
+          {/* 3. Co+2Fe ☕ Button */}
+          <button
+            onClick={() => setIsSupportPageOpen(true)}
+            className="flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 sm:py-2 bg-gradient-to-r from-amber-500/20 via-rose-500/20 to-pink-500/20 hover:from-amber-500/30 hover:to-pink-500/30 text-amber-300 hover:text-amber-200 border border-amber-500/40 hover:border-amber-500/60 rounded-xl text-xs font-bold backdrop-blur-xl transition shadow-lg shadow-amber-500/10 cursor-pointer"
+            title="Support Developer & Backend / Co+2Fe"
+          >
+            <Coffee className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-400 animate-pulse" />
+            <span>Co+2Fe ☕</span>
           </button>
         </div>
       </header>
@@ -396,6 +412,20 @@ export default function App() {
                 onToggleUnits={() => setUseFahrenheit(!useFahrenheit)}
               />
             )}
+
+            {/* Mobile quick support button */}
+            <div className="pt-2 border-t border-slate-800 flex items-center justify-between">
+              <button
+                onClick={() => {
+                  setIsMobileSheetOpen(false);
+                  setIsSupportPageOpen(true);
+                }}
+                className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-amber-500/20 via-rose-500/20 to-pink-500/20 text-amber-300 border border-amber-500/40 text-xs font-bold flex items-center justify-center gap-2"
+              >
+                <Coffee className="w-4 h-4 text-amber-400" />
+                <span>Co+2Fe ☕ (love you man 😘)</span>
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -405,6 +435,11 @@ export default function App() {
         isOpen={isGuideOpen}
         onClose={() => setIsGuideOpen(false)}
       />
+
+      {/* Dedicated Support / Ads / Appreciation Page */}
+      {isSupportPageOpen && (
+        <SupportPage onBack={() => setIsSupportPageOpen(false)} />
+      )}
     </div>
   );
 }

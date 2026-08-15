@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Camera as CameraIcon, CameraOff, Hand, HelpCircle, Maximize2, Minimize2, ShieldCheck, Sparkles, Volume2, VolumeX } from "lucide-react";
+import { Camera as CameraIcon, CameraOff, Hand, HelpCircle, Maximize2, Minimize2, Volume2, VolumeX } from "lucide-react";
+import { FilesetResolver, HandLandmarker } from "@mediapipe/tasks-vision";
 import { GestureType, HandGestureData } from "../../types";
 import { classifyHandGesture, drawHandSkeleton } from "../../utils/handGestureDetector";
 
@@ -9,6 +10,45 @@ interface GestureHUDProps {
   onOpenGuide: () => void;
   isCameraActive: boolean;
   onToggleCamera: () => void;
+}
+
+// Shared vision and landmarker singleton cache
+let cachedHandLandmarker: HandLandmarker | null = null;
+let isInitializingLandmarker = false;
+
+async function getHandLandmarker(): Promise<HandLandmarker> {
+  if (cachedHandLandmarker) {
+    return cachedHandLandmarker;
+  }
+  if (isInitializingLandmarker) {
+    // Wait for in-flight initialization
+    while (isInitializingLandmarker) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    if (cachedHandLandmarker) return cachedHandLandmarker;
+  }
+
+  isInitializingLandmarker = true;
+  try {
+    const vision = await FilesetResolver.forVisionTasks(
+      "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/wasm"
+    );
+    cachedHandLandmarker = await HandLandmarker.createFromOptions(vision, {
+      baseOptions: {
+        modelAssetPath:
+          "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
+        delegate: "GPU",
+      },
+      runningMode: "VIDEO",
+      numHands: 1,
+      minHandDetectionConfidence: 0.5,
+      minHandPresenceConfidence: 0.5,
+      minTrackingConfidence: 0.5,
+    });
+    return cachedHandLandmarker;
+  } finally {
+    isInitializingLandmarker = false;
+  }
 }
 
 export const GestureHUD: React.FC<GestureHUDProps> = ({
@@ -37,129 +77,140 @@ export const GestureHUD: React.FC<GestureHUDProps> = ({
     return () => window.removeEventListener("resize", checkMobile);
   }, []);
 
-  // Initialize MediaPipe Hands & Camera Feed
+  // Initialize MediaPipe Vision Tasks & Camera Feed
   useEffect(() => {
-    let cameraInstance: any = null;
-    let handsInstance: any = null;
-    let isProcessingFrame = false;
+    let isCancelled = false;
+    let localStream: MediaStream | null = null;
+    let animFrameId: number | null = null;
+    let lastVideoTime = -1;
 
-    async function initMediaPipe() {
+    async function initCameraAndLandmarker() {
       if (!isCameraActive || !videoRef.current || !canvasRef.current) return;
 
       try {
         setCameraError(null);
 
-        // Pre-check getUserMedia permission directly
-        try {
-          const stream = await navigator.mediaDevices.getUserMedia({
-            video: { width: { ideal: 640 }, height: { ideal: 480 } },
-          });
-          // Stop stream tracks so MediaPipe Camera instance can attach cleanly
+        // 1. Request Webcam Stream
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            width: { ideal: 640 },
+            height: { ideal: 480 },
+            facingMode: "user",
+          },
+          audio: false,
+        });
+
+        if (isCancelled) {
           stream.getTracks().forEach((track) => track.stop());
-        } catch (permErr: any) {
-          console.warn("Direct getUserMedia check failed:", permErr);
-          if (
-            permErr.name === "NotAllowedError" ||
-            permErr.name === "PermissionDeniedError" ||
-            permErr.message?.includes("Permission denied")
-          ) {
-            setCameraError("Camera permission denied. Please allow camera access in your browser address bar.");
-          } else if (permErr.name === "NotFoundError" || permErr.name === "DevicesNotFoundError") {
-            setCameraError("No camera device was detected on your device.");
-          } else {
-            setCameraError(`Camera feed error: ${permErr.message || "Permission denied"}`);
-          }
           return;
         }
 
-        // Import MediaPipe Hands & Camera Utils dynamically
-        const handsModule = await import("@mediapipe/hands");
-        const cameraModule = await import("@mediapipe/camera_utils");
-
-        const Hands = handsModule.Hands;
-        const Camera = cameraModule.Camera;
-
-        handsInstance = new Hands({
-          locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
-        });
-
-        handsInstance.setOptions({
-          maxNumHands: 1,
-          modelComplexity: 0, // 0 (Lite) for minimal CPU overhead and instant tracking
-          minDetectionConfidence: 0.5,
-          minTrackingConfidence: 0.5,
-        });
-
-        handsInstance.onResults((results: any) => {
-          if (!canvasRef.current) return;
-          const ctx = canvasRef.current.getContext("2d");
-          if (!ctx) return;
-
-          if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-            const landmarks = results.multiHandLandmarks[0];
-            const data = classifyHandGesture(landmarks);
-            onGestureUpdate(data);
-
-            // Draw Skeleton
-            drawHandSkeleton(ctx, landmarks, data.gesture);
-          } else {
-            ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
-            onGestureUpdate({
-              gesture: "none",
-              confidence: 0,
-              x: 0.5,
-              y: 0.5,
-              deltaX: 0,
-              deltaY: 0,
-              pinchDistance: 1,
-              isTracking: false,
-              landmarksCount: 0,
-            });
-          }
-        });
-
-        if (videoRef.current) {
-          cameraInstance = new Camera(videoRef.current, {
-            onFrame: async () => {
-              if (videoRef.current && handsInstance && !isProcessingFrame) {
-                isProcessingFrame = true;
-                try {
-                  await handsInstance.send({ image: videoRef.current });
-                } catch (e) {
-                  // Ignore frame drop errors
-                } finally {
-                  isProcessingFrame = false;
-                }
-              }
-            },
-            width: 640,
-            height: 480,
-          });
-
-          await cameraInstance.start().catch((startErr: any) => {
-            console.warn("MediaPipe Camera start failed:", startErr);
-            setCameraError("Failed to acquire camera feed: Permission denied or camera busy.");
-          });
+        localStream = stream;
+        const video = videoRef.current;
+        if (video) {
+          video.srcObject = stream;
+          await video.play();
         }
+
+        // 2. Load / Get MediaPipe HandLandmarker
+        const landmarker = await getHandLandmarker();
+
+        if (isCancelled) return;
+
+        // 3. Continuous Video Detection Loop via requestAnimationFrame
+        const detectFrame = () => {
+          if (isCancelled) return;
+
+          const currentVideo = videoRef.current;
+          const currentCanvas = canvasRef.current;
+
+          if (
+            currentVideo &&
+            currentCanvas &&
+            currentVideo.readyState >= 2 &&
+            !currentVideo.paused &&
+            !currentVideo.ended
+          ) {
+            if (currentVideo.currentTime !== lastVideoTime) {
+              lastVideoTime = currentVideo.currentTime;
+              const startTimeMs = performance.now();
+
+              try {
+                const results = landmarker.detectForVideo(currentVideo, startTimeMs);
+                const ctx = currentCanvas.getContext("2d");
+
+                if (results.landmarks && results.landmarks.length > 0) {
+                  const landmarks = results.landmarks[0]; // 21 hand landmarks {x, y, z}
+                  const classified = classifyHandGesture(landmarks);
+                  onGestureUpdate(classified);
+
+                  if (ctx) {
+                    drawHandSkeleton(ctx, landmarks, classified.gesture);
+                  }
+                } else {
+                  if (ctx) {
+                    ctx.clearRect(0, 0, currentCanvas.width, currentCanvas.height);
+                  }
+                  onGestureUpdate({
+                    gesture: "none",
+                    confidence: 0,
+                    x: 0.5,
+                    y: 0.5,
+                    deltaX: 0,
+                    deltaY: 0,
+                    isTracking: false,
+                    landmarksCount: 0,
+                  });
+                }
+              } catch (detectErr) {
+                // Ignore transient frame skips
+              }
+            }
+          }
+
+          animFrameId = requestAnimationFrame(detectFrame);
+        };
+
+        animFrameId = requestAnimationFrame(detectFrame);
       } catch (err: any) {
-        console.error("Camera / MediaPipe initialization error:", err);
-        setCameraError("Camera permission or MediaPipe initialization failed.");
+        console.error("Hand tracking / camera init error:", err);
+        if (!isCancelled) {
+          if (
+            err.name === "NotAllowedError" ||
+            err.name === "PermissionDeniedError" ||
+            err.message?.includes("Permission denied")
+          ) {
+            setCameraError("Camera permission denied. Please allow camera access in your browser address bar.");
+          } else if (err.name === "NotFoundError" || err.name === "DevicesNotFoundError") {
+            setCameraError("No camera device was detected on your system.");
+          } else {
+            setCameraError(err.message || "Failed to initialize camera or hand detection model.");
+          }
+        }
       }
     }
 
     if (isCameraActive) {
-      initMediaPipe();
+      initCameraAndLandmarker();
     }
 
     return () => {
-      if (cameraInstance) {
-        try { cameraInstance.stop(); } catch (e) {}
+      isCancelled = true;
+      if (animFrameId !== null) {
+        cancelAnimationFrame(animFrameId);
       }
-      if (handsInstance) {
-        try { handsInstance.close(); } catch (e) {}
+      if (localStream) {
+        localStream.getTracks().forEach((t) => t.stop());
+      }
+      if (videoRef.current) {
+        videoRef.current.srcObject = null;
+      }
+      if (canvasRef.current) {
+        const ctx = canvasRef.current.getContext("2d");
+        if (ctx) ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
       }
     };
-  }, [isCameraActive, retryCount]);
+  }, [isCameraActive, retryCount, onGestureUpdate]);
 
   const lastGestureRef = useRef<GestureType>("none");
   useEffect(() => {
@@ -209,12 +260,12 @@ export const GestureHUD: React.FC<GestureHUDProps> = ({
   // 1. MOBILE CAMERA UI (< 768px)
   if (isMobile) {
     if (!isCameraActive) {
-      return null; // Hide floating 'Start Hand Camera' button overlay on mobile
+      return null;
     }
 
     return (
       <div className="flex flex-col gap-1 items-start">
-        {/* Hidden/Live Video and Canvas (ALWAYS in DOM for unbroken MediaPipe tracking loop) */}
+        {/* Hidden/Live Video and Canvas (ALWAYS in DOM for unbroken tracking loop) */}
         <div
           className={
             isMinimized
@@ -454,4 +505,3 @@ export const GestureHUD: React.FC<GestureHUDProps> = ({
     </div>
   );
 };
-
