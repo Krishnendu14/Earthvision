@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 import { ArrowLeft, Heart, ExternalLink, Sparkles, ShieldCheck } from "lucide-react";
 import stickerImg from "../../assets/images/sticker.webp";
 
@@ -7,6 +7,8 @@ interface SupportPageProps {
 }
 
 export const SupportPage: React.FC<SupportPageProps> = ({ onBack }) => {
+  const adIframeRef = useRef<HTMLIFrameElement>(null);
+
   // Allow ESC key to return back to Globe
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -18,72 +20,59 @@ export const SupportPage: React.FC<SupportPageProps> = ({ onBack }) => {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [onBack]);
 
-  // Dynamically load ad scripts ONLY while SupportPage is mounted and clean them up on unmount
+  // Inject ad scripts inside an isolated iframe document so popups NEVER leak to the 3D Globe
   useEffect(() => {
-    const scripts: HTMLScriptElement[] = [];
-
-    // Helper to create and track script
-    const createAdScript = (src: string, attributes: Record<string, string> = {}) => {
-      const s = document.createElement("script");
-      s.src = src;
-      s.async = true;
-      s.setAttribute("data-support-page-ad", "true");
-      Object.entries(attributes).forEach(([k, v]) => s.setAttribute(k, v));
-      document.body.appendChild(s);
-      scripts.push(s);
-      return s;
-    };
+    const iframe = adIframeRef.current;
+    if (!iframe) return;
 
     try {
-      // 1. In-Page Push · Pleasant tag (zone 11581771)
-      const inPagePush = document.createElement("script");
-      inPagePush.dataset.zone = "11581771";
-      inPagePush.src = "https://nap5k.com/tag.min.js";
-      inPagePush.async = true;
-      inPagePush.setAttribute("data-support-page-ad", "true");
-      document.body.appendChild(inPagePush);
-      scripts.push(inPagePush);
-
-      // 2. Push · Immortal tag (zone 11581750)
-      createAdScript("https://5gvci.com/act/files/tag.min.js?z=11581750", {
-        "data-cfasync": "false",
-      });
-
-      // 3. Multitag · Fabulous tag (zone 270202)
-      createAdScript("https://quge5.com/88/tag.min.js", {
-        "data-zone": "270202",
-        "data-cfasync": "false",
-      });
-
-      // 4. Vignette · Magnificent tag (zone 11578682)
-      const vignette = document.createElement("script");
-      vignette.dataset.zone = "11578682";
-      vignette.src = "https://n6wxm.com/vignette.min.js";
-      vignette.async = true;
-      vignette.setAttribute("data-support-page-ad", "true");
-      document.body.appendChild(vignette);
-      scripts.push(vignette);
-    } catch (err) {
-      console.warn("Notice loading support ads:", err);
+      const doc = iframe.contentDocument || iframe.contentWindow?.document;
+      if (doc) {
+        doc.open();
+        doc.write(`
+          <!DOCTYPE html>
+          <html>
+            <head>
+              <meta charset="utf-8">
+              <style>
+                body {
+                  margin: 0;
+                  padding: 8px;
+                  background: transparent;
+                  color: #94a3b8;
+                  font-family: system-ui, -apple-system, sans-serif;
+                  display: flex;
+                  flex-direction: column;
+                  align-items: center;
+                  justify-content: center;
+                }
+              </style>
+              <!-- 1. Push · Immortal tag (zone 11581750) -->
+              <script src="https://5gvci.com/act/files/tag.min.js?z=11581750" data-cfasync="false" async></script>
+              
+              <!-- 2. Multitag · Fabulous tag (zone 270202) -->
+              <script src="https://quge5.com/88/tag.min.js" data-zone="270202" async data-cfasync="false"></script>
+              
+              <!-- 3. In-Page Push · Pleasant tag (zone 11581771) -->
+              <script>
+                (function(s){s.dataset.zone='11581771',s.src='https://nap5k.com/tag.min.js'})([document.documentElement, document.body].filter(Boolean).pop().appendChild(document.createElement('script')));
+              </script>
+              
+              <!-- 4. Vignette · Magnificent tag (zone 11578682) -->
+              <script>
+                (function(s){s.dataset.zone='11578682',s.src='https://n6wxm.com/vignette.min.js'})([document.documentElement, document.body].filter(Boolean).pop().appendChild(document.createElement('script')));
+              </script>
+            </head>
+            <body>
+              <div style="font-size: 11px; color: #64748b; text-align: center;">Sponsored Partner Content Loaded</div>
+            </body>
+          </html>
+        `);
+        doc.close();
+      }
+    } catch (e) {
+      console.warn("Support ad frame setup notice:", e);
     }
-
-    // Cleanup: remove all injected ad scripts and associated temporary DOM nodes when leaving SupportPage
-    return () => {
-      scripts.forEach((script) => {
-        try {
-          if (script.parentNode) {
-            script.parentNode.removeChild(script);
-          }
-        } catch {}
-      });
-
-      // Also clean up any lingering elements injected with data-support-page-ad
-      document.querySelectorAll('[data-support-page-ad="true"]').forEach((el) => {
-        try {
-          el.remove();
-        } catch {}
-      });
-    };
   }, []);
 
   return (
@@ -108,7 +97,7 @@ export const SupportPage: React.FC<SupportPageProps> = ({ onBack }) => {
       </header>
 
       {/* Main Content Area */}
-      <main className="flex-1 max-w-2xl w-full mx-auto px-4 py-10 flex flex-col items-center justify-center text-center gap-6">
+      <main className="flex-1 max-w-2xl w-full mx-auto px-4 py-8 sm:py-10 flex flex-col items-center justify-center text-center gap-5 sm:gap-6">
         {/* 1. Developer Appreciation Hub Badge */}
         <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs font-semibold animate-pulse">
           <Heart className="w-4 h-4 fill-rose-400 text-rose-400" />
@@ -133,11 +122,16 @@ export const SupportPage: React.FC<SupportPageProps> = ({ onBack }) => {
 
           <div className="relative w-56 h-56 sm:w-64 sm:h-64 rounded-2xl overflow-hidden bg-slate-950 border border-slate-800 flex items-center justify-center p-2 group-hover:scale-105 transition-transform duration-300">
             <img
-              src={stickerImg}
+              src={stickerImg || "/sticker.webp"}
               alt="Love you man sticker"
               className="w-full h-full object-contain select-none"
               onError={(e) => {
-                (e.target as HTMLImageElement).src = "https://i.ibb.co/k2BGnsMc/STK-20250314-WA0000.webp";
+                const target = e.target as HTMLImageElement;
+                if (!target.src.endsWith("/sticker.webp")) {
+                  target.src = "/sticker.webp";
+                } else {
+                  target.src = "https://i.ibb.co/k2BGnsMc/STK-20250314-WA0000.webp";
+                }
               }}
             />
           </div>
@@ -177,7 +171,17 @@ export const SupportPage: React.FC<SupportPageProps> = ({ onBack }) => {
           </div>
         </div>
 
-        {/* 6. Gradient Blue Back to Globe Button */}
+        {/* 6. Isolated Ad Frame Container (Prevents Globe Popups) */}
+        <div className="w-full max-w-md rounded-xl overflow-hidden bg-slate-900/50 border border-slate-800/80">
+          <iframe
+            ref={adIframeRef}
+            title="Sponsor Ads"
+            className="w-full h-24 border-0"
+            sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
+          />
+        </div>
+
+        {/* 7. Gradient Blue Back to Globe Button */}
         <div className="pt-2">
           <button
             onClick={onBack}
@@ -191,4 +195,3 @@ export const SupportPage: React.FC<SupportPageProps> = ({ onBack }) => {
     </div>
   );
 };
-

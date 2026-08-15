@@ -67,16 +67,9 @@ export default function App() {
   // UI Modals & Camera & Mobile Sheet Drawer state
   const [isGuideOpen, setIsGuideOpen] = useState<boolean>(false);
   const [isSupportPageOpen, setIsSupportPageOpen] = useState<boolean>(false);
-  const [isCameraActive, setIsCameraActive] = useState<boolean>(true);
+  const [isCameraActive, setIsCameraActive] = useState<boolean>(false);
   const [isMobileSheetOpen, setIsMobileSheetOpen] = useState<boolean>(false);
   const [mobileSheetTab, setMobileSheetTab] = useState<"search" | "layers">("search");
-
-  // Auto-trigger hand camera startup on launch if mediaDevices is supported
-  useEffect(() => {
-    if (typeof navigator !== "undefined" && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-      setIsCameraActive(true);
-    }
-  }, []);
 
   // Load live Open-Meteo weather on startup for default location
   useEffect(() => {

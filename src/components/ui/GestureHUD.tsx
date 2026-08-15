@@ -173,18 +173,21 @@ export const GestureHUD: React.FC<GestureHUDProps> = ({
 
         animFrameId = requestAnimationFrame(detectFrame);
       } catch (err: any) {
-        console.error("Hand tracking / camera init error:", err);
         if (!isCancelled) {
           if (
             err.name === "NotAllowedError" ||
             err.name === "PermissionDeniedError" ||
-            err.message?.includes("Permission denied")
+            err.message?.includes("Permission denied") ||
+            err.message?.includes("not allowed")
           ) {
-            setCameraError("Camera permission denied. Please allow camera access in your browser address bar.");
+            console.warn("Hand tracking / camera permission was not granted by browser:", err.message || err.name);
+            setCameraError("Camera permission was denied. You can allow camera access in your browser settings or continue using mouse controls.");
           } else if (err.name === "NotFoundError" || err.name === "DevicesNotFoundError") {
-            setCameraError("No camera device was detected on your system.");
+            console.warn("Camera device not found:", err.message || err.name);
+            setCameraError("No webcam was detected on this device.");
           } else {
-            setCameraError(err.message || "Failed to initialize camera or hand detection model.");
+            console.warn("Hand tracking initialization notice:", err.message || err);
+            setCameraError(err.message || "Failed to initialize camera feed.");
           }
         }
       }
